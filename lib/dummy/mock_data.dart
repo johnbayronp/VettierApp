@@ -9,7 +9,8 @@ final List<Map<String, dynamic>> clinics = [
     'longitude': -72.378026,
     'nit': '900123456-1',
     'phone': '+57 310 1234567',
-    'rating': 4.8
+    'rating': 4.8,
+    'description': 'Clínica veterinaria integral con más de 10 años de experiencia. Ofrecemos servicios de salud preventiva, cirugías, consultas especializadas y peluquería canina. Nuestro equipo de veterinarios altamente calificados está comprometido con el bienestar de tus mascotas.'
   },
   {
     'name': 'Peluquería Canina Happy',
@@ -21,7 +22,8 @@ final List<Map<String, dynamic>> clinics = [
     'longitude': -72.409906,
     'nit': '900654321-2',
     'phone': '+57 311 7654321',
-    'rating': 4.6
+    'rating': 4.6,
+    'description': 'Especialistas en peluquería y estética canina. Ofrecemos servicios de baño, corte de pelo, corte de uñas, limpieza de oídos y tratamientos especiales para la piel. También realizamos consultas básicas de salud y vacunación.'
   },
   {
     'name': 'Consultorio Felino',
@@ -33,7 +35,8 @@ final List<Map<String, dynamic>> clinics = [
     'longitude': -72.3751,
     'nit': '900789123-3',
     'phone': '+57 312 9876543',
-    'rating': 4.9
+    'rating': 4.9,
+    'description': 'Consultorio especializado exclusivamente en gatos. Nuestros veterinarios felinos tienen amplia experiencia en el comportamiento, nutrición y salud de los gatos. Ofrecemos consultas especializadas, vacunación y tratamientos específicos para felinos.'
   },
   {
     'name': 'NutriVet',
@@ -45,7 +48,8 @@ final List<Map<String, dynamic>> clinics = [
     'longitude': -72.3751,
     'nit': '900321987-4',
     'phone': '+57 313 4567890',
-    'rating': 4.7
+    'rating': 4.7,
+    'description': 'Centro especializado en nutrición veterinaria. Ofrecemos asesoría nutricional personalizada, dietas especiales para mascotas con condiciones médicas, control de peso y consultas generales. Contamos con una amplia variedad de alimentos premium y suplementos.'
   },
   {
     'name': 'Clínica Integral',
@@ -57,7 +61,8 @@ final List<Map<String, dynamic>> clinics = [
     'longitude': -72.392215,
     'nit': '900456789-5',
     'phone': '+57 314 6543210',
-    'rating': 4.5
+    'rating': 4.5,
+    'description': 'Clínica veterinaria integral que ofrece servicios completos para el cuidado de mascotas. Incluimos medicina preventiva, cirugías, nutrición especializada, peluquería y emergencias 24/7. Nuestro equipo multidisciplinario garantiza la mejor atención para tu mascota.'
   },
 ];
 

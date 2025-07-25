@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:mirallapp/features/home/presentation/map_screen.dart';
+import 'package:mirallapp/features/home/presentation/clinic_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -209,11 +210,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       separatorBuilder: (_, __) => const SizedBox(width: 16),
                       itemBuilder: (context, i) {
                         final clinic = filteredClinics[i];
-                        return _ClinicCard(
-                          name: clinic['name'],
-                          image: clinic['image'],
-                          address: clinic['address'],
-                          rating: clinic['rating'],
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ClinicDetailScreen(clinic: clinic),
+                              ),
+                            );
+                          },
+                          child: _ClinicCard(
+                            name: clinic['name'],
+                            image: clinic['image'],
+                            address: clinic['address'],
+                            rating: clinic['rating'],
+                          ),
                         );
                       },
                     ),
