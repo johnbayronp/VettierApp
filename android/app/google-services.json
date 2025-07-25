@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "485398409446",
+    "project_id": "mirallapp",
+    "storage_bucket": "mirallapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:485398409446:android:0ad36bab68167b0defcb27",
+        "android_client_info": {
+          "package_name": "com.bapesu.mirallapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAtpgaP_3psu2RE2YLYo0JdCYBN8DRkqiQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
