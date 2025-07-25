@@ -53,8 +53,8 @@ final List<Map<String, dynamic>> clinics = [
     'image': 'https://picsum.photos/200/300?random=5',
     'address': 'Av. 9 #22-11',
     'city': 'Yopal',
-    'latitude': 5.330910, 
-    'longitude': -72.410249,
+    'latitude': 5.319418, 
+    'longitude': -72.392215,
     'nit': '900456789-5',
     'phone': '+57 314 6543210',
     'rating': 4.5
