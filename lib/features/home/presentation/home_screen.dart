@@ -2,6 +2,7 @@ import 'package:mirallapp/dummy/mock_data.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:mirallapp/features/home/presentation/map_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -87,10 +88,13 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundImage: users[0]['photoURL'] != null ? NetworkImage(users[0]['photoURL']) : null,
-              child: users[0]['photoURL'] == null ? Icon(Icons.person) : null,
+            child: IconButton(
+              icon: Icon(Icons.map, color: Colors.deepPurple, size: 28),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => MapScreen()),
+                );
+              },
             ),
           ),
         ],
