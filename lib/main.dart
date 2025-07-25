@@ -7,7 +7,7 @@ import 'features/auth/data/firebase_auth_repository.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'features/explore/presentation/explore_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
-import 'package:mirallapp/shared/widgets/custom_bottom_nav_bar.dart';
+import 'package:mirallapp/shared/widgets/custom_animated_nav_bar.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -105,30 +105,11 @@ class _MainNavigationState extends State<MainNavigation> {
       ProfileScreen(),
     ];
     return Scaffold(
+      backgroundColor: Colors.white,
       body: screens[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: _onNav,
-        selectedItemColor: Colors.purple,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Inicio',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_bag),
-            label: 'Productos',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_today),
-            label: 'Citas',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Perfil',
-          ),
-        ],
+      bottomNavigationBar: CustomAnimatedNavBar(
+        selectedIndex: _selectedIndex,
+        onItemSelected: _onNav,
       ),
     );
   }

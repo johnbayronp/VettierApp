@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:mirallapp/shared/widgets/custom_bottom_nav_bar.dart';
 import 'edit_profile_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../data/user_repository.dart';
