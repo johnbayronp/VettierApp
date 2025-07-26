@@ -4,6 +4,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:mirallapp/features/home/presentation/map_screen.dart';
 import 'package:mirallapp/features/home/presentation/clinic_detail_screen.dart';
+import 'package:mirallapp/features/home/presentation/add_pet_screen.dart';
+import 'package:mirallapp/features/home/presentation/pet_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -55,8 +57,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }).toList();
     print('Clínicas encontradas: ${filteredClinics.length}');
 
-         // Buscar la próxima cita (la más próxima en fecha)
-     final now = DateTime.now();
+    // Buscar la próxima cita (la más próxima en fecha)
+    final now = DateTime.now();
      final upcomingAppointments = appointments
        .where((a) => a['date'] is DateTime && (a['date'] as DateTime).isAfter(now))
        .toList();
@@ -243,7 +245,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Text('Mis Mascotas', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                   IconButton(
                     icon: const Icon(Icons.add_circle, color: Colors.deepOrange, size: 32),
-                    onPressed: () {},
+                    onPressed: () => _openAddPetScreen(),
                   ),
                 ],
               ),
@@ -253,14 +255,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   scrollDirection: Axis.horizontal,
                   itemCount: petsList.length,
                   separatorBuilder: (_, __) => const SizedBox(width: 16),
-                  itemBuilder: (context, i) {
-                    final pet = petsList[i];
-                    return _PetCard(
-                      name: pet['name'] ?? 'Sin nombre', 
-                      image: pet['image'] ?? 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=200&h=200&fit=crop',
-                      type: pet['type'] ?? 'Sin Raza',
-                    );
-                  },
+                                     itemBuilder: (context, i) {
+                     final pet = petsList[i];
+                     return GestureDetector(
+                       onTap: () {
+                         Navigator.push(
+                           context,
+                           MaterialPageRoute(
+                             builder: (context) => PetDetailScreen(pet: pet),
+                           ),
+                         );
+                       },
+                       child: _PetCard(
+                         name: pet['name'] ?? 'Sin nombre', 
+                         image: pet['image'] ?? 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=200&h=200&fit=crop',
+                         type: pet['type'] ?? 'Sin Raza',
+                       ),
+                     );
+                   },
                 ),
               ),
               const SizedBox(height: 32),
@@ -269,6 +281,17 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  void _openAddPetScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddPetScreen(),
+      ),
+    ).then((_) {
+      setState(() {});
+    });
   }
 }
 
@@ -358,6 +381,7 @@ class _NextAppointmentCard extends StatelessWidget {
       ),
     );
   }
+
 }
 
 class _PetCard extends StatelessWidget {
