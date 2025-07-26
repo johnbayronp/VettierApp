@@ -14,6 +14,7 @@ class _ClinicDetailScreenState extends State<ClinicDetailScreen> {
   DateTime selectedDate = DateTime.now().add(Duration(days: 1));
   String? selectedTime;
 
+
   final List<String> availableTimes = [
     '09:00 AM',
     '10:00 AM',
@@ -74,6 +75,7 @@ class _ClinicDetailScreenState extends State<ClinicDetailScreen> {
                 child: IconButton(
                   icon: Icon(Icons.phone, color: Colors.white),
                   onPressed: () {
+                    print('clinic: ${widget.clinic}');
                     // Aquí iría la lógica para hacer la llamada
                     final phone = widget.clinic['phone'] ?? '';
                     if (phone.isNotEmpty) {
@@ -107,7 +109,7 @@ class _ClinicDetailScreenState extends State<ClinicDetailScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            widget.clinic['name'],
+                            widget.clinic['name'] ?? 'Clínica',
                             style: TextStyle(
                               fontSize: 28,
                               fontWeight: FontWeight.bold,
@@ -130,7 +132,7 @@ class _ClinicDetailScreenState extends State<ClinicDetailScreen> {
                               Icon(Icons.star, color: Colors.white, size: 16),
                               SizedBox(width: 4),
                               Text(
-                                widget.clinic['rating'].toString(),
+                                (widget.clinic['rating'] ?? 0.0).toString(),
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -250,26 +252,16 @@ class _ClinicDetailScreenState extends State<ClinicDetailScreen> {
                        child: ListView(
                         scrollDirection: Axis.horizontal,
                         children: [
-                          _DoctorCard(
-                            name: 'Dr. María García',
-                            specialty: 'Cirugía',
-                            image:
-                                'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=100&h=100&fit=crop&crop=face',
-                          ),
-                          SizedBox(width: 12),
-                          _DoctorCard(
-                            name: 'Dr. Carlos López',
-                            specialty: 'Medicina General',
-                            image:
-                                'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=100&h=100&fit=crop&crop=face',
-                          ),
-                          SizedBox(width: 12),
-                          _DoctorCard(
-                            name: 'Dra. Ana Rodríguez',
-                            specialty: 'Dermatología',
-                            image:
-                                'https://images.unsplash.com/photo-1594824475545-9d0c7c4951c5?w=100&h=100&fit=crop&crop=face',
-                          ),
+                          ...getDoctorsByClinic(widget.clinic['id'] ?? '' ).map((doctor) => 
+                            Padding(
+                              padding: EdgeInsets.only(right: 12),
+                              child: _DoctorCard(
+                                name: doctor['name'] ?? 'Sin nombre',
+                                specialty: doctor['specialty'] ?? 'Sin especialidad',
+                                image: doctor['photoURL'] ?? 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=100&h=100&fit=crop&crop=face',
+                              ),
+                            ),
+                          ).toList(),
                         ],
                       ),
                     ),
@@ -493,8 +485,9 @@ class _DoctorCard extends StatelessWidget {
          children: [
            CircleAvatar(
              radius: 35,
-             backgroundImage: NetworkImage(image),
+             backgroundImage: image.isNotEmpty ? NetworkImage(image) : null,
              backgroundColor: Colors.grey[300],
+             child: image.isEmpty ? Icon(Icons.person, size: 35, color: Colors.grey[600]) : null,
            ),
            SizedBox(height: 12),
            Text(
