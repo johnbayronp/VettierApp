@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:mirallapp/dummy/mock_data.dart';
 import 'package:flutter_map_marker_popup/flutter_map_marker_popup.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:mirallapp/features/home/presentation/clinic_detail_screen.dart';
 import 'dart:math';
 
 class MapScreen extends StatefulWidget {
@@ -17,7 +18,7 @@ class _MapScreenState extends State<MapScreen> {
 
   LatLng? _currentCenter;
   double _currentZoom = 17.0;
-  int _selectedRadius = 10000; // 10km por defecto
+  int _selectedRadius = 1000; // 1km por defecto para mostrar solo cercanas
   final List<int> _radiusOptions = [1000, 5000, 10000, 20000];
 
   @override
@@ -41,6 +42,28 @@ class _MapScreenState extends State<MapScreen> {
             snapshot.data!.longitude,
           );
         }
+
+        // Filtrar clínicas dentro del radio seleccionado
+        List<Map<String, dynamic>> clinicsInRadius = [];
+        if (userPosition != null) {
+          clinicsInCity.forEach((clinic) {
+            final double distance = Geolocator.distanceBetween(
+              userPosition!.latitude,
+              userPosition!.longitude,
+              clinic['latitude'],
+              clinic['longitude'],
+            );
+            if (distance <= _selectedRadius) {
+              clinicsInRadius.add({
+                ...clinic,
+                'distance': distance,
+              });
+            }
+          });
+          // Ordenar por distancia
+          clinicsInRadius.sort((a, b) => a['distance'].compareTo(b['distance']));
+        }
+
         final markers = <Marker>[
           ...clinicsInCity.map((clinic) {
             // Calcular distancia entre usuario y clínica
@@ -214,9 +237,198 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ],
                 ),
-                // Botones de zoom y centrar
+                // Tarjetas de clínicas en la parte inferior
+                if (clinicsInRadius.isNotEmpty)
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 10,
+                    child: Container(
+                      height: 160,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        itemCount: clinicsInRadius.length,
+                        itemBuilder: (context, index) {
+                          final clinic = clinicsInRadius[index];
+                          final distance = clinic['distance'] as double;
+                          final distanceText = distance < 1000 
+                              ? '${distance.toInt()} m'
+                              : '${(distance / 1000).toStringAsFixed(1)} km';
+                          
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ClinicDetailScreen(
+                                    clinic: clinic,
+                                  ),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              width: 180,
+                              margin: EdgeInsets.only(right: 12),
+                              child: Card(
+                                elevation: 4,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Imagen de la clínica
+                                    Container(
+                                      height: 80,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.only(
+                                          topLeft: Radius.circular(12),
+                                          topRight: Radius.circular(12),
+                                        ),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.only(
+                                          topLeft: Radius.circular(12),
+                                          topRight: Radius.circular(12),
+                                        ),
+                                        child: clinic['image'] != null
+                                            ? Image.network(
+                                                clinic['image'],
+                                                width: double.infinity,
+                                                height: 80,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (context, error, stackTrace) {
+                                                  return Container(
+                                                    color: Colors.pink[300],
+                                                    child: Center(
+                                                      child: Icon(
+                                                        Icons.local_hospital,
+                                                        color: Colors.white,
+                                                        size: 30,
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                                loadingBuilder: (context, child, loadingProgress) {
+                                                  if (loadingProgress == null) return child;
+                                                  return Container(
+                                                    color: Colors.grey[200],
+                                                    child: Center(
+                                                      child: CircularProgressIndicator(
+                                                        value: loadingProgress.expectedTotalBytes != null
+                                                            ? loadingProgress.cumulativeBytesLoaded / 
+                                                              loadingProgress.expectedTotalBytes!
+                                                            : null,
+                                                        strokeWidth: 2,
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                              )
+                                            : Container(
+                                                color: Colors.pink[300],
+                                                child: Center(
+                                                  child: Icon(
+                                                    Icons.local_hospital,
+                                                    color: Colors.white,
+                                                    size: 30,
+                                                  ),
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                    // Información de la clínica
+                                    Padding(
+                                      padding: EdgeInsets.all(8),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            clinic['name'],
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          SizedBox(height: 2),
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                'Distancia $distanceText',
+                                                style: TextStyle(
+                                                  color: Colors.grey[600],
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.star,
+                                                    color: const Color.fromARGB(255, 255, 199, 17),
+                                                    size: 16,
+                                                  ),
+                                                  SizedBox(width: 2),
+                                                  Text(
+                                                    clinic['rating'].toString(),
+                                                    style: TextStyle(
+                                                      color: const Color.fromARGB(255, 31, 30, 30),
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                                         ),
+                   ),
+
+                 // Información del radio después de las tarjetas
+                 if (clinicsInRadius.isNotEmpty)
+                   Positioned(
+                     bottom: 160,
+                     left: 16,
+                     child: Container(
+                       padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                       decoration: BoxDecoration(
+                         color: Colors.white.withOpacity(0.9),
+                         borderRadius: BorderRadius.circular(20),
+                         boxShadow: [
+                           BoxShadow(
+                             color: Colors.black.withOpacity(0.1),
+                             blurRadius: 4,
+                             offset: Offset(0, 2),
+                           ),
+                         ],
+                       ),
+                       child: Text(
+                         'Radio ${(_selectedRadius / 1000).toStringAsFixed(0)} km | Solo cercanas',
+                         style: TextStyle(
+                           color: Colors.purple,
+                           fontWeight: FontWeight.w500,
+                           fontSize: 12,
+                         ),
+                       ),
+                     ),
+                   ),
+
+                 // Botones de zoom y centrar
                 Positioned(
-                  bottom: 24,
+                  bottom: clinicsInRadius.isNotEmpty ? 150 : 24,
                   right: 16,
                   child: Column(
                     children: [

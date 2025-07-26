@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:mirallapp/features/home/presentation/map_screen.dart';
+import 'package:mirallapp/features/home/presentation/clinic_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -41,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final String userName = users[0]['name'];
-    final List<Map<String, String>> petsList = pets;
+    final List<Map<String, dynamic>> petsList = pets;
     final List<Map<String, dynamic>> clinicsList = clinics;
     final filteredClinics = clinicsList.where((c) {
       final services = c['services'];
@@ -54,17 +55,24 @@ class _HomeScreenState extends State<HomeScreen> {
     }).toList();
     print('Clínicas encontradas: ${filteredClinics.length}');
 
-    // Buscar la próxima cita (la más próxima en fecha)
-    final now = DateTime.now();
-    final upcomingAppointments = appointments
-      .map((a) => {...a, 'parsedDate': DateTime.parse(a['date'])})
-      .where((a) => a['parsedDate'].isAfter(now))
-      .toList();
-    upcomingAppointments.sort((a, b) => (a['parsedDate'] as DateTime).compareTo(b['parsedDate'] as DateTime));
-    final nextAppointment = upcomingAppointments.isNotEmpty ? upcomingAppointments.first : null;
-    // Buscar mascota y clínica
-    final pet = nextAppointment != null ? pets.firstWhere((p) => p['name'] != null && nextAppointment['petId'] != null && p['name']!.toLowerCase().contains(nextAppointment['petId'].toString().toLowerCase()), orElse: () => pets.first) : pets.first;
-    final clinic = clinics.isNotEmpty ? clinics.first : null; // Mock: tomar la primera clínica
+         // Buscar la próxima cita (la más próxima en fecha)
+     final now = DateTime.now();
+     final upcomingAppointments = appointments
+       .where((a) => a['date'] is DateTime && (a['date'] as DateTime).isAfter(now))
+       .toList();
+     upcomingAppointments.sort((a, b) => (a['date'] as DateTime).compareTo(b['date'] as DateTime));
+     final nextAppointment = upcomingAppointments.isNotEmpty ? upcomingAppointments.first : null;
+         // Buscar mascota y clínica
+   final pet = nextAppointment != null
+    ? pets.firstWhere(
+        (p) => p['petId'] == nextAppointment['petId'], 
+        orElse: () => pets.first
+      )
+    : pets.first;
+   final clinic = nextAppointment != null ? clinics.firstWhere(
+     (c) => c['id'] == nextAppointment['clinicId'], 
+     orElse: () => clinics.first
+   ) : (clinics.isNotEmpty ? clinics.first : null);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -209,11 +217,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       separatorBuilder: (_, __) => const SizedBox(width: 16),
                       itemBuilder: (context, i) {
                         final clinic = filteredClinics[i];
-                        return _ClinicCard(
-                          name: clinic['name'],
-                          image: clinic['image'],
-                          address: clinic['address'],
-                          rating: clinic['rating'],
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ClinicDetailScreen(clinic: clinic),
+                              ),
+                            );
+                          },
+                          child: _ClinicCard(
+                            name: clinic['name'] ?? 'Clínica sin nombre',
+                            image: clinic['image'] ?? 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=800',
+                            address: clinic['address'] ?? 'Dirección no disponible',
+                            rating: clinic['rating'] ?? 0.0,
+                          ),
                         );
                       },
                     ),
@@ -229,15 +247,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              SizedBox(
-                height: 140,
-                child: ListView.separated(
+                             SizedBox(
+                 height: 160,
+                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: petsList.length,
                   separatorBuilder: (_, __) => const SizedBox(width: 16),
                   itemBuilder: (context, i) {
                     final pet = petsList[i];
-                    return _PetCard(name: pet['name']!, image: pet['image']!);
+                    return _PetCard(
+                      name: pet['name'] ?? 'Sin nombre', 
+                      image: pet['image'] ?? 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=200&h=200&fit=crop',
+                      type: pet['type'] ?? 'Sin Raza',
+                    );
                   },
                 ),
               ),
@@ -280,16 +302,16 @@ class _QuickAction extends StatelessWidget {
 // Tarjeta mejorada de próxima cita
 class _NextAppointmentCard extends StatelessWidget {
   final Map<String, dynamic> appointment;
-  final Map<String, String> pet;
+  final Map<String, dynamic> pet;
   final Map<String, dynamic> clinic;
 
   const _NextAppointmentCard({required this.appointment, required this.pet, required this.clinic});
 
-  @override
-  Widget build(BuildContext context) {
-    final DateTime date = DateTime.parse(appointment['date']);
-    final String formattedDate = '${date.day}/${date.month}/${date.year}';
-    final String formattedTime = '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+     @override
+   Widget build(BuildContext context) {
+     final DateTime date = appointment['date'] as DateTime;
+     final String formattedDate = '${date.day}/${date.month}/${date.year}';
+     final String formattedTime = '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -341,67 +363,51 @@ class _NextAppointmentCard extends StatelessWidget {
 class _PetCard extends StatelessWidget {
   final String name;
   final String image;
-  const _PetCard({required this.name, required this.image});
+  final String type;
+  const _PetCard({required this.name, required this.image, required this.type});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 160,
-      height: 200,
+      height: 180,
+      width: 100,
       margin: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(28),
-              topRight: Radius.circular(28),
-            ),
-            child: Image.network(
-              image,
-              height: 80,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
-                height: 80,
-                color: Colors.grey[200],
-                child: const Icon(Icons.pets, size: 48, color: Colors.grey),
-              ),
-            ),
+          // Círculo con imagen del dueño
+          CircleAvatar(
+            radius: 40,
+            backgroundImage: image.isNotEmpty 
+              ? NetworkImage(image)
+              : null,
+            backgroundColor: image.isEmpty ? Colors.grey[300] : null,
+            child: image.isEmpty 
+              ? Icon(Icons.person, size: 40, color: Colors.grey[600])
+              : null,
           ),
-          Expanded(
-            child: Container(
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(28),
-                  bottomRight: Radius.circular(28),
-                ),
-              ),
-              child: Text(
-                name,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 22,
-                  color: Color.fromARGB(221, 37, 37, 37),
-                  fontFamily: 'Poppins',
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+          SizedBox(height: 8),
+          // Nombre del dueño
+          Text(
+            name,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: Colors.black87,
             ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          SizedBox(height: 1),
+          // Tipo de mascota
+          Text(
+            type,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -438,14 +444,19 @@ class _ClinicCard extends StatelessWidget {
           children: [
             // Imagen de fondo
             Positioned.fill(
-              child: Image.network(
-                image,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  color: Colors.grey[200],
-                  child: const Icon(Icons.broken_image, size: 48, color: Colors.grey),
-                ),
-              ),
+              child: image.isNotEmpty 
+                ? Image.network(
+                    image,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: Colors.grey[200],
+                      child: const Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                    ),
+                  )
+                : Container(
+                    color: Colors.grey[200],
+                    child: const Icon(Icons.local_hospital, size: 48, color: Colors.grey),
+                  ),
             ),
             // Eliminar overlay superior (no incluir Positioned con top: 0)
             // Overlay difuminado inferior
