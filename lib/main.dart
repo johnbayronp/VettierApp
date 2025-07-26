@@ -107,9 +107,14 @@ class _MainNavigationState extends State<MainNavigation> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: screens[_selectedIndex],
-      bottomNavigationBar: CustomAnimatedNavBar(
-        selectedIndex: _selectedIndex,
-        onItemSelected: _onNav,
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(bottom: 0),
+          child: CustomAnimatedNavBar(
+            selectedIndex: _selectedIndex,
+            onItemSelected: _onNav,
+          ),
+        ),
       ),
     );
   }
