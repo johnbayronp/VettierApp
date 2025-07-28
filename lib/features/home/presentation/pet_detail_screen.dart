@@ -1,6 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:mirallapp/dummy/mock_data.dart';
 import 'package:mirallapp/features/home/presentation/add_pet_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../data/appointment_repository.dart';
+import '../data/clinic_repository.dart';
+import 'appointment_model.dart';
+import 'clinic_model.dart';
+import 'appointment_detail_screen.dart';
+import 'appointment_model.dart';
+import 'medication_model.dart';
+import 'medical_record_model.dart';
+import '../data/medication_repository.dart';
+import '../data/medical_record_repository.dart';
 
 class PetDetailScreen extends StatefulWidget {
   final Map<String, dynamic> pet;
@@ -28,6 +40,23 @@ class _PetDetailScreenState extends State<PetDetailScreen> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
+    // Validar que tenemos datos válidos de la mascota
+    if (widget.pet == null || widget.pet.isEmpty) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          title: Text('Error'),
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: Center(
+          child: Text('Datos de mascota no válidos', style: TextStyle(color: Colors.grey[600])),
+        ),
+      );
+    }
+    
     return Scaffold(
       backgroundColor: Colors.white,
              body: NestedScrollView(
@@ -43,16 +72,16 @@ class _PetDetailScreenState extends State<PetDetailScreen> with SingleTickerProv
                  icon: Icon(Icons.arrow_back, color: Colors.white),
                  onPressed: () => Navigator.pop(context),
                ),
-                               title: innerBoxIsScrolled ? Text(
-                  widget.pet['name'] ?? 'Sin nombre',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ) : null,
+                                                               title: innerBoxIsScrolled ? Text(
+                   widget.pet['name']?.toString() ?? 'Sin nombre',
+                   style: TextStyle(
+                     color: Colors.white,
+                     fontWeight: FontWeight.bold,
+                     fontSize: 16,
+                   ),
+                   maxLines: 1,
+                   overflow: TextOverflow.ellipsis,
+                 ) : null,
                actions: [
                  IconButton(
                    icon: Icon(Icons.edit, color: Colors.white),
@@ -62,11 +91,11 @@ class _PetDetailScreenState extends State<PetDetailScreen> with SingleTickerProv
               flexibleSpace: FlexibleSpaceBar(
                 background: Stack(
                   children: [
-                    // Imagen de fondo de la mascota
-                    Positioned.fill(
-                      child: widget.pet['image'] != null && widget.pet['image'].toString().isNotEmpty
-                        ? Image.network(
-                            widget.pet['image'],
+                                         // Imagen de fondo de la mascota
+                     Positioned.fill(
+                       child: widget.pet['image'] != null && widget.pet['image'].toString().isNotEmpty
+                         ? Image.network(
+                             widget.pet['image'].toString(),
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) => Container(
                               decoration: BoxDecoration(
@@ -123,8 +152,8 @@ class _PetDetailScreenState extends State<PetDetailScreen> with SingleTickerProv
                       bottom: 60,
                       left: 16,
                       right: 16,
-                      child: Text(
-                        widget.pet['name'] ?? 'Sin nombre',
+                                             child: Text(
+                         widget.pet['name']?.toString() ?? 'Sin nombre',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -172,315 +201,551 @@ class _PetDetailScreenState extends State<PetDetailScreen> with SingleTickerProv
     );
   }
 
-  Widget _buildUpcomingAppointments() {
-    final petId = widget.pet['id'];
-    final upcomingAppointments = appointments
-        .where((a) => a['petId'] == petId && 
-                     a['date'] is DateTime && 
-                     (a['date'] as DateTime).isAfter(DateTime.now()))
-        .toList();
-    
-    upcomingAppointments.sort((a, b) => (a['date'] as DateTime).compareTo(b['date'] as DateTime));
+    Widget _buildUpcomingAppointments() {
+    try {
+      final petId = widget.pet['petId'] ?? '';
+      if (petId.isEmpty) {
+        return Center(
+          child: Text('ID de mascota no válido', style: TextStyle(color: Colors.grey[600])),
+        );
+      }
+      
+      return StreamBuilder<List<Appointment>>(
+        stream: FirebaseAppointmentRepository().getUpcomingAppointmentsByPet(petId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
 
-    if (upcomingAppointments.isEmpty) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Error al cargar citas: ${snapshot.error}', style: TextStyle(color: Colors.red)),
+            );
+          }
+
+          final upcomingAppointments = snapshot.data ?? [];
+
+          if (upcomingAppointments.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.event_busy, size: 64, color: Colors.grey[400]),
+                  SizedBox(height: 16),
+                  Text(
+                    'No hay citas próximas',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Agenda una nueva cita para tu mascota',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: EdgeInsets.all(16),
+            itemCount: upcomingAppointments.length,
+            itemBuilder: (context, index) {
+              final appointment = upcomingAppointments[index];
+
+              return FutureBuilder<Clinic?>(
+                future: FirebaseClinicRepository().getClinic(appointment.clinicId),
+                builder: (context, clinicSnapshot) {
+                  final clinicName = clinicSnapshot.data?.name ?? 'Clínica no encontrada';
+
+                  return Card(
+                    margin: EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.purple.shade100,
+                        child: Icon(Icons.medical_services, color: Colors.purple),
+                      ),
+                      title: Text(
+                        appointment.reason,
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(clinicName),
+                          Text(
+                            '${appointment.date.day}/${appointment.date.month}/${appointment.date.year} a las ${appointment.date.hour.toString().padLeft(2, '0')}:${appointment.date.minute.toString().padLeft(2, '0')}',
+                            style: TextStyle(color: Colors.purple),
+                          ),
+                        ],
+                      ),
+                      trailing: Icon(Icons.arrow_forward_ios, size: 16),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AppointmentDetailScreen(appointment: appointment),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.event_busy, size: 64, color: Colors.grey[400]),
-            SizedBox(height: 16),
-            Text(
-              'No hay citas próximas',
-              style: TextStyle(
-                fontSize: 18,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Agenda una nueva cita para tu mascota',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
-            ),
-          ],
-        ),
+        child: Text('Error al cargar citas: $e', style: TextStyle(color: Colors.red)),
       );
     }
-
-                  return ListView.builder(
-           padding: EdgeInsets.all(16),
-           itemCount: upcomingAppointments.length,
-      itemBuilder: (context, index) {
-        final appointment = upcomingAppointments[index];
-        final clinic = clinics.firstWhere(
-          (c) => c['id'] == appointment['clinicId'],
-          orElse: () => {'name': 'Clínica no encontrada'},
-        );
-        final date = appointment['date'] as DateTime;
-
-        return Card(
-          margin: EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.purple.shade100,
-              child: Icon(Icons.medical_services, color: Colors.purple),
-            ),
-            title: Text(
-              appointment['reason'] ?? 'Sin motivo',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(clinic['name'] ?? 'Clínica no encontrada'),
-                Text(
-                  '${date.day}/${date.month}/${date.year} a las ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}',
-                  style: TextStyle(color: Colors.purple),
-                ),
-              ],
-            ),
-            trailing: Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () {
-              // Aquí se podría abrir un detalle de la cita
-            },
-          ),
-        );
-      },
-    );
   }
 
   Widget _buildAppointmentHistory() {
-    final petId = widget.pet['id'];
-    final pastAppointments = appointments
-        .where((a) => a['petId'] == petId && 
-                     a['date'] is DateTime && 
-                     (a['date'] as DateTime).isBefore(DateTime.now()))
-        .toList();
-    
-    pastAppointments.sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
+    try {
+      final petId = widget.pet['petId'] ?? '';
+      if (petId.isEmpty) {
+        return Center(
+          child: Text('ID de mascota no válido', style: TextStyle(color: Colors.grey[600])),
+        );
+      }
+      
+      return StreamBuilder<List<Appointment>>(
+        stream: FirebaseAppointmentRepository().getAppointmentsByPet(petId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
 
-    if (pastAppointments.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.history, size: 64, color: Colors.grey[400]),
-            SizedBox(height: 16),
-            Text(
-              'No hay historial de citas',
-              style: TextStyle(
-                fontSize: 18,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Error al cargar historial: ${snapshot.error}', style: TextStyle(color: Colors.red)),
+            );
+          }
+
+          final allAppointments = snapshot.data ?? [];
+          
+          // Filtrar citas pasadas y canceladas
+          final pastAppointments = allAppointments.where((appointment) {
+            final isPast = appointment.date.isBefore(DateTime.now());
+            final isCanceled = appointment.status.toLowerCase() == 'cancelada';
+            return isPast || isCanceled;
+          }).toList();
+
+          // Ordenar por fecha (más recientes primero)
+          pastAppointments.sort((a, b) => b.date.compareTo(a.date));
+
+          if (pastAppointments.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.history, size: 64, color: Colors.grey[400]),
+                  SizedBox(height: 16),
+                  Text(
+                    'No hay historial de citas',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
+            );
+          }
+
+          return ListView.builder(
+            padding: EdgeInsets.all(16),
+            itemCount: pastAppointments.length,
+            itemBuilder: (context, index) {
+              final appointment = pastAppointments[index];
+              
+              // Determinar el color y icono según el estado
+              Color statusColor;
+              IconData statusIcon;
+              String statusText;
+              
+              switch (appointment.status.toLowerCase()) {
+                case 'cancelada':
+                  statusColor = Colors.red;
+                  statusIcon = Icons.cancel;
+                  statusText = 'Cancelada';
+                  break;
+                case 'completada':
+                  statusColor = Colors.green;
+                  statusIcon = Icons.check;
+                  statusText = 'Completada';
+                  break;
+                default:
+                  statusColor = Colors.orange;
+                  statusIcon = Icons.schedule;
+                  statusText = 'Pasada';
+              }
+
+              return FutureBuilder<Clinic?>(
+                future: FirebaseClinicRepository().getClinic(appointment.clinicId),
+                builder: (context, clinicSnapshot) {
+                  final clinicName = clinicSnapshot.data?.name ?? 'Clínica no encontrada';
+
+                  return Card(
+                    margin: EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: statusColor.withOpacity(0.1),
+                        child: Icon(statusIcon, color: statusColor),
+                      ),
+                      title: Text(
+                        appointment.reason,
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(clinicName),
+                          Text(
+                            '${appointment.date.day}/${appointment.date.month}/${appointment.date.year} a las ${appointment.date.hour.toString().padLeft(2, '0')}:${appointment.date.minute.toString().padLeft(2, '0')}',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                          Text(
+                            statusText,
+                            style: TextStyle(
+                              color: statusColor,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                      trailing: Icon(Icons.arrow_forward_ios, size: 16),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AppointmentDetailScreen(appointment: appointment),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      return Center(
+        child: Text('Error al cargar historial: $e', style: TextStyle(color: Colors.red)),
       );
     }
-
-         return ListView.builder(
-       padding: EdgeInsets.all(16),
-       itemCount: pastAppointments.length,
-      itemBuilder: (context, index) {
-        final appointment = pastAppointments[index];
-        final clinic = clinics.firstWhere(
-          (c) => c['id'] == appointment['clinicId'],
-          orElse: () => {'name': 'Clínica no encontrada'},
-        );
-        final date = appointment['date'] as DateTime;
-
-        return Card(
-          margin: EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.green.shade100,
-              child: Icon(Icons.check, color: Colors.green),
-            ),
-            title: Text(
-              appointment['reason'] ?? 'Sin motivo',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(clinic['name'] ?? 'Clínica no encontrada'),
-                Text(
-                  '${date.day}/${date.month}/${date.year}',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ],
-            ),
-            trailing: Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () {
-              // Aquí se podría abrir el detalle de la cita pasada
-            },
-          ),
-        );
-      },
-    );
   }
 
   Widget _buildMedications() {
-         // Mock data para medicamentos
-     final medications = [
-       {
-         'name': 'Acetaminofen',
-         'dosage': '1 tableta cada 3 meses',
-         'startDate': '2024-01-15',
-         'endDate': '2024-04-15',
-         'status': 'Activo',
-       },
-       {
-         'name': 'Vitaminas',
-         'dosage': '1 tableta diaria',
-         'startDate': '2024-02-01',
-         'endDate': '2024-05-01',
-         'status': 'Activo',
-       },
-       {
-         'name': 'Antiparasitario',
-         'dosage': '1 dosis cada 6 meses',
-         'startDate': '2024-03-01',
-         'endDate': '2024-09-01',
-         'status': 'Activo',
-       },
-       {
-         'name': 'Antiinflamatorio',
-         'dosage': '1 tableta cada 12 horas',
-         'startDate': '2024-03-10',
-         'endDate': '2024-03-20',
-         'status': 'Activo',
-       },
-       {
-         'name': 'Probiótico',
-         'dosage': '1 sobre diario',
-         'startDate': '2024-02-15',
-         'endDate': '2024-05-15',
-         'status': 'Activo',
-       },
-     ];
-
-         return ListView.builder(
-       padding: EdgeInsets.all(16),
-       itemCount: medications.length,
-      itemBuilder: (context, index) {
-        final medication = medications[index];
-
-        return Card(
-          margin: EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.orange.shade100,
-              child: Icon(Icons.medication, color: Colors.orange),
-            ),
-            title: Text(
-              medication['name']!,
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(medication['dosage']!),
-                Text(
-                  '${medication['startDate']} - ${medication['endDate']}',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ],
-            ),
-            trailing: Container(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.green.shade100,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                medication['status']!,
-                style: TextStyle(
-                  color: Colors.green,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
+    try {
+      final petId = widget.pet['petId'] ?? '';
+      if (petId.isEmpty) {
+        return Center(
+          child: Text('ID de mascota no válido', style: TextStyle(color: Colors.grey[600])),
         );
-      },
-    );
+      }
+      
+      return StreamBuilder<List<Medication>>(
+        stream: FirebaseMedicationRepository().getMedicationsByPet(petId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Error al cargar medicamentos: ${snapshot.error}', style: TextStyle(color: Colors.red)),
+            );
+          }
+
+          final medications = snapshot.data ?? [];
+
+          if (medications.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.medication_outlined, size: 64, color: Colors.grey[400]),
+                  SizedBox(height: 16),
+                  Text(
+                    'No hay medicamentos registrados',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Los medicamentos prescritos aparecerán aquí',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: EdgeInsets.all(16),
+            itemCount: medications.length,
+            itemBuilder: (context, index) {
+              final medication = medications[index];
+              
+              // Determinar el color según el estado
+              Color statusColor;
+              String statusText;
+              
+              switch (medication.status.toLowerCase()) {
+                case 'active':
+                  statusColor = Colors.green;
+                  statusText = 'Activo';
+                  break;
+                case 'completed':
+                  statusColor = Colors.blue;
+                  statusText = 'Completado';
+                  break;
+                case 'discontinued':
+                  statusColor = Colors.red;
+                  statusText = 'Discontinuado';
+                  break;
+                default:
+                  statusColor = Colors.grey;
+                  statusText = 'Desconocido';
+              }
+
+              return Card(
+                margin: EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: statusColor.withOpacity(0.1),
+                    child: Icon(Icons.medication, color: statusColor),
+                  ),
+                  title: Text(
+                    medication.name,
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${medication.dosage} - ${medication.frequency}'),
+                      Text(
+                        '${medication.startDate.day}/${medication.startDate.month}/${medication.startDate.year}',
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                      if (medication.endDate != null)
+                        Text(
+                          'Hasta: ${medication.endDate!.day}/${medication.endDate!.month}/${medication.endDate!.year}',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                    ],
+                  ),
+                  trailing: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      statusText,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      return Center(
+        child: Text('Error al cargar medicamentos: $e', style: TextStyle(color: Colors.red)),
+      );
+    }
   }
 
   Widget _buildMedicalHistory() {
-    // Mock data para historia clínica
-    final medicalRecords = [
-      {
-        'date': '2024-03-15',
-        'type': 'Vacunación',
-        'description': 'Vacuna contra la rabia aplicada',
-        'veterinarian': 'Dr. García',
-      },
-      {
-        'date': '2024-02-20',
-        'type': 'Consulta',
-        'description': 'Revisión general, todo normal',
-        'veterinarian': 'Dr. Martínez',
-      },
-      {
-        'date': '2024-01-10',
-        'type': 'Cirugía',
-        'description': 'Esterilización realizada con éxito',
-        'veterinarian': 'Dr. López',
-      },
-    ];
-
-         return ListView.builder(
-       padding: EdgeInsets.all(16),
-       itemCount: medicalRecords.length,
-      itemBuilder: (context, index) {
-        final record = medicalRecords[index];
-
-        return Card(
-          margin: EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.blue.shade100,
-              child: Icon(Icons.medical_information, color: Colors.blue),
-            ),
-            title: Text(
-              record['type']!,
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(record['description']!),
-                SizedBox(height: 4),
-                Text(
-                  'Dr. ${record['veterinarian']} • ${record['date']}',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-            trailing: Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () {
-              // Aquí se podría abrir el detalle del registro médico
-            },
-          ),
+    try {
+      final petId = widget.pet['petId'] ?? '';
+      if (petId.isEmpty) {
+        return Center(
+          child: Text('ID de mascota no válido', style: TextStyle(color: Colors.grey[600])),
         );
-      },
-    );
+      }
+      
+      return StreamBuilder<List<MedicalRecord>>(
+        stream: FirebaseMedicalRecordRepository().getMedicalRecordsByPet(petId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Error al cargar historia clínica: ${snapshot.error}', style: TextStyle(color: Colors.red)),
+            );
+          }
+
+          final medicalRecords = snapshot.data ?? [];
+
+          if (medicalRecords.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.medical_information_outlined, size: 64, color: Colors.grey[400]),
+                  SizedBox(height: 16),
+                  Text(
+                    'No hay registros médicos',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Los registros médicos aparecerán aquí',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: EdgeInsets.all(16),
+            itemCount: medicalRecords.length,
+            itemBuilder: (context, index) {
+              final record = medicalRecords[index];
+              
+              // Determinar el color y icono según el tipo
+              Color typeColor;
+              IconData typeIcon;
+              
+              switch (record.type.toLowerCase()) {
+                case 'vaccination':
+                  typeColor = Colors.green;
+                  typeIcon = Icons.vaccines;
+                  break;
+                case 'consultation':
+                  typeColor = Colors.blue;
+                  typeIcon = Icons.medical_services;
+                  break;
+                case 'surgery':
+                  typeColor = Colors.red;
+                  typeIcon = Icons.local_hospital;
+                  break;
+                case 'treatment':
+                  typeColor = Colors.orange;
+                  typeIcon = Icons.healing;
+                  break;
+                case 'checkup':
+                  typeColor = Colors.purple;
+                  typeIcon = Icons.health_and_safety;
+                  break;
+                default:
+                  typeColor = Colors.grey;
+                  typeIcon = Icons.medical_information;
+              }
+
+              return FutureBuilder<Map<String, dynamic>?>(
+                future: _getVeterinarianInfo(record.veterinarianId),
+                builder: (context, vetSnapshot) {
+                  final veterinarianName = vetSnapshot.data?['name'] ?? 'Veterinario no encontrado';
+
+                  return Card(
+                    margin: EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: typeColor.withOpacity(0.1),
+                        child: Icon(typeIcon, color: typeColor),
+                      ),
+                      title: Text(
+                        record.title,
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(record.description),
+                          SizedBox(height: 4),
+                          Text(
+                            'Dr. $veterinarianName • ${record.date.day}/${record.date.month}/${record.date.year}',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                      trailing: Icon(Icons.arrow_forward_ios, size: 16),
+                      onTap: () {
+                        // Aquí se podría abrir el detalle del registro médico
+                      },
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      return Center(
+        child: Text('Error al cargar historia clínica: $e', style: TextStyle(color: Colors.red)),
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>?> _getVeterinarianInfo(String veterinarianId) async {
+    try {
+      if (veterinarianId.isEmpty) {
+        return null;
+      }
+      
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(veterinarianId)
+          .get();
+      
+      if (doc.exists) {
+        return doc.data();
+      } else {
+        return null;
+      }
+    } catch (e) {
+      return null;
+    }
   }
 
   void _openEditPetScreen() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AddPetScreen(petToEdit: widget.pet), // Pasamos los datos de la mascota
+        builder: (context) => AddPetScreen(petToEdit: widget.pet),
       ),
     ).then((_) {
       setState(() {});

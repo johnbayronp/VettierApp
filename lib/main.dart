@@ -8,10 +8,27 @@ import 'features/home/presentation/home_screen.dart';
 import 'features/explore/presentation/explore_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
 import 'package:mirallapp/shared/widgets/custom_animated_nav_bar.dart';
+// Importar los providers adicionales
+import 'features/home/presentation/user_provider.dart';
+import 'features/home/presentation/pet_provider.dart';
+import 'features/home/presentation/clinic_provider.dart';
+import 'features/home/presentation/appointment_provider.dart';
+import 'features/home/data/user_repository.dart';
+import 'features/home/data/pet_repository.dart';
+import 'features/home/data/clinic_repository.dart';
+import 'features/home/data/appointment_repository.dart';
+import 'core/firestore_test.dart';
+// Importar las nuevas pantallas
+import 'features/home/presentation/add_pet_screen.dart';
+import 'features/home/presentation/schedule_appointment_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  
+  // Ejecutar pruebas de Firestore en desarrollo
+  await FirestoreTest.runAllTests();
+  
   runApp(const MirallaApp());
 }
 
@@ -25,19 +42,95 @@ class MirallaApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => AuthProvider(FirebaseAuthRepository()),
         ),
+        // Providers para las entidades de la aplicación
+        ChangeNotifierProvider(
+          create: (_) => UserProvider(repository: FirebaseUserRepository()),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => PetProvider(repository: FirebasePetRepository()),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ClinicProvider(repository: FirebaseClinicRepository()),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => AppointmentProvider(repository: FirebaseAppointmentRepository()),
+        ),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'VetApp',
+        title: 'MirallaApp',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.purple),
           useMaterial3: true,
         ),
-        home: const MainNavigation(),
+        home: const AuthWrapper(),
         routes: {
+          '/login': (_) => const LoginScreen(),
           '/main': (_) => const MainNavigation(),
+          '/add-pet': (_) => const AddPetScreen(),
+          '/schedule-appointment': (_) => const ScheduleAppointmentScreen(),
         },
       ),
+    );
+  }
+}
+
+// Widget que maneja la lógica de autenticación
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, _) {
+        return StreamBuilder<bool>(
+          stream: authProvider.isLoggedIn,
+          builder: (context, snapshot) {
+            // Mientras se está verificando el estado de autenticación
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                backgroundColor: Color(0xFF990045),
+                body: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.pets, size: 80, color: Colors.white),
+                      SizedBox(height: 24),
+                      Text(
+                        'Miralla',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      SizedBox(height: 32),
+                      CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 3,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            // Si hay un error en la verificación o no hay datos, mostrar login
+            if (snapshot.hasError || !snapshot.hasData) {
+              return const LoginScreen();
+            }
+
+            // Si el usuario está autenticado, mostrar la navegación principal
+            if (snapshot.data == true) {
+              return const MainNavigation();
+            }
+
+            // Si el usuario no está autenticado, mostrar la pantalla de login
+            return const LoginScreen();
+          },
+        );
+      },
     );
   }
 }

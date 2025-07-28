@@ -18,7 +18,26 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _authRepository.registerWithEmail(email: email, password: password, displayName: displayName, age: age, location: location);
     } catch (e) {
-      _setError(e.toString());
+      // Manejar errores específicos de Firebase Auth
+      String errorMessage = 'Error al registrar usuario';
+      
+      if (e.toString().contains('email-already-in-use')) {
+        errorMessage = 'El correo electrónico ya está en uso';
+      } else if (e.toString().contains('weak-password')) {
+        errorMessage = 'La contraseña es muy débil';
+      } else if (e.toString().contains('invalid-email')) {
+        errorMessage = 'Correo electrónico inválido';
+      } else if (e.toString().contains('PigeonUserDetails')) {
+        // Ignorar errores de PigeonUserDetails ya que el registro fue exitoso
+        print('✅ Registro exitoso a pesar del error PigeonUserDetails');
+        errorMessage = ''; // No mostrar error al usuario
+      } else {
+        errorMessage = 'Error: ${e.toString()}';
+      }
+      
+      if (errorMessage.isNotEmpty) {
+        _setError(errorMessage);
+      }
     } finally {
       _setLoading(false);
     }
@@ -30,7 +49,25 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _authRepository.loginWithEmail(email: email, password: password);
     } catch (e) {
-      _setError(e.toString());
+      String errorMessage = 'Error al iniciar sesión';
+      
+      if (e.toString().contains('user-not-found')) {
+        errorMessage = 'Usuario no encontrado';
+      } else if (e.toString().contains('wrong-password')) {
+        errorMessage = 'Contraseña incorrecta';
+      } else if (e.toString().contains('invalid-email')) {
+        errorMessage = 'Correo electrónico inválido';
+      } else if (e.toString().contains('PigeonUserDetails')) {
+        // Ignorar errores de PigeonUserDetails ya que el login fue exitoso
+        print('✅ Login exitoso a pesar del error PigeonUserDetails');
+        errorMessage = ''; // No mostrar error al usuario
+      } else {
+        errorMessage = 'Error: ${e.toString()}';
+      }
+      
+      if (errorMessage.isNotEmpty) {
+        _setError(errorMessage);
+      }
     } finally {
       _setLoading(false);
     }

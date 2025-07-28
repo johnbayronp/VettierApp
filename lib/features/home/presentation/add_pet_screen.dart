@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:mirallapp/dummy/mock_data.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'pet_model.dart';
+import '../data/pet_repository.dart';
 
 class AddPetScreen extends StatefulWidget {
   final Map<String, dynamic>? petToEdit;
@@ -14,9 +19,15 @@ class _AddPetScreenState extends State<AddPetScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _breedController = TextEditingController();
+  final _medicalNotesController = TextEditingController();
   final _ageController = TextEditingController();
+  final _weightController = TextEditingController();
+  
   String? _selectedType;
   String? _selectedGender;
+  File? _selectedImage;
+  final ImagePicker _picker = ImagePicker();
+  bool _isLoading = false;
 
   final List<String> petTypes = [
     'Perro',
@@ -48,8 +59,134 @@ class _AddPetScreenState extends State<AddPetScreen> {
   void dispose() {
     _nameController.dispose();
     _breedController.dispose();
+    _medicalNotesController.dispose();
     _ageController.dispose();
+    _weightController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: source,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 80,
+      );
+      
+      if (image != null) {
+        setState(() {
+          _selectedImage = File(image.path);
+        });
+      }
+    } catch (e) {
+      print('Error seleccionando imagen: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error al seleccionar imagen'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showImagePickerDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Seleccionar imagen'),
+          content: const Text('¿De dónde quieres seleccionar la imagen?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _pickImage(ImageSource.camera);
+              },
+              child: const Text('Cámara'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _pickImage(ImageSource.gallery);
+              },
+              child: const Text('Galería'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _savePet() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception('Usuario no autenticado');
+      }
+
+      // Crear ID único para la mascota
+      final petId = 'pet_${DateTime.now().millisecondsSinceEpoch}';
+      
+      // Crear objeto Pet
+      final pet = Pet(
+        petId: petId,
+        ownerId: user.uid,
+        name: _nameController.text.trim(),
+        species: _selectedType ?? 'Dog',
+        breed: _breedController.text.trim(),
+        type: _selectedType ?? 'Perro',
+        gender: _selectedGender ?? 'Macho',
+        age: int.tryParse(_ageController.text.trim()) ?? 0,
+        birthdate: DateTime.now().subtract(Duration(days: (int.tryParse(_ageController.text.trim()) ?? 0) * 365)).toIso8601String(),
+        weight: double.tryParse(_weightController.text.trim()) ?? 0.0,
+        photoURL: '', // Por ahora vacío, se puede implementar subida de imagen
+        medicalNotes: _medicalNotesController.text.trim(),
+      );
+
+      // Guardar en Firebase
+      final repository = FirebasePetRepository();
+      await repository.createPet(pet);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('¡${_nameController.text.trim()} ha sido agregado exitosamente!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      print('Error guardando mascota: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al guardar mascota: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -100,25 +237,36 @@ class _AddPetScreenState extends State<AddPetScreen> {
                       Center(
                         child: Column(
                           children: [
-                            Container(
-                              width: 120,
-                              height: 120,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[200],
-                                borderRadius: BorderRadius.circular(60),
-                                border: Border.all(color: Colors.grey[300]!),
-                              ),
-                              child: Icon(
-                                Icons.add_a_photo,
-                                size: 40,
-                                color: Colors.grey[600],
+                            GestureDetector(
+                              onTap: _showImagePickerDialog,
+                              child: Container(
+                                width: 120,
+                                height: 120,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(60),
+                                  border: Border.all(color: Colors.grey[300]!),
+                                ),
+                                child: _selectedImage != null
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(60),
+                                        child: Image.file(
+                                          _selectedImage!,
+                                          width: 120,
+                                          height: 120,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      )
+                                    : Icon(
+                                        Icons.add_a_photo,
+                                        size: 40,
+                                        color: Colors.grey[600],
+                                      ),
                               ),
                             ),
                             SizedBox(height: 12),
                             TextButton(
-                              onPressed: () {
-                                // Aquí iría la lógica para seleccionar foto
-                              },
+                              onPressed: _showImagePickerDialog,
                               child: Text(
                                 'Agregar foto',
                                 style: TextStyle(
@@ -212,6 +360,35 @@ class _AddPetScreenState extends State<AddPetScreen> {
                         },
                       ),
 
+                      SizedBox(height: 20),
+
+                      // Peso
+                      _buildTextField(
+                        controller: _weightController,
+                        label: 'Peso (kg)',
+                        hint: 'Ej: 15.5',
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Por favor ingresa el peso';
+                          }
+                          if (double.tryParse(value) == null) {
+                            return 'Por favor ingresa un número válido';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      SizedBox(height: 20),
+
+                      // Notas médicas
+                      _buildTextField(
+                        controller: _medicalNotesController,
+                        label: 'Notas médicas (opcional)',
+                        hint: 'Información médica importante...',
+                        validator: (value) => null, // Opcional
+                      ),
+
                       SizedBox(height: 40),
                     ],
                   ),
@@ -224,7 +401,7 @@ class _AddPetScreenState extends State<AddPetScreen> {
               child: Padding(
                 padding: EdgeInsets.all(20),
                 child: ElevatedButton(
-                  onPressed: _savePet,
+                  onPressed: _isLoading ? null : _savePet,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.purple,
                     foregroundColor: Colors.white,
@@ -235,10 +412,19 @@ class _AddPetScreenState extends State<AddPetScreen> {
                     elevation: 0,
                     minimumSize: Size(double.infinity, 50),
                   ),
-                  child: Text(
-                    widget.petToEdit != null ? 'Guardar cambios' : 'Guardar mascota',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
+                  child: _isLoading
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : Text(
+                          widget.petToEdit != null ? 'Guardar cambios' : 'Guardar mascota',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
                 ),
               ),
             ),
@@ -311,87 +497,26 @@ class _AddPetScreenState extends State<AddPetScreen> {
           ),
         ),
         SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: value,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.purple),
-            ),
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey[300]!),
           ),
-          hint: Text('Seleccionar...'),
-          items: items.map((item) {
-            return DropdownMenuItem<String>(
-              value: item,
-              child: Text(item),
-            );
-          }).toList(),
-          onChanged: onChanged,
-          validator: validator,
+          child: DropdownButton<String>(
+            value: value,
+            isExpanded: true,
+            underline: SizedBox(),
+            hint: Text('Seleccionar...'),
+            items: items.map((item) {
+              return DropdownMenuItem<String>(value: item, child: Text(item));
+            }).toList(),
+            onChanged: onChanged,
+          ),
         ),
       ],
     );
-  }
-
-  void _savePet() {
-    if (_formKey.currentState!.validate()) {
-      if (widget.petToEdit != null) {
-        // Editar mascota existente
-        final petIndex = pets.indexWhere((pet) => pet['id'] == widget.petToEdit!['id']);
-        if (petIndex != -1) {
-          pets[petIndex] = {
-            ...widget.petToEdit!,
-            'name': _nameController.text,
-            'type': _selectedType,
-            'breed': _breedController.text,
-            'gender': _selectedGender,
-            'age': int.parse(_ageController.text),
-          };
-        }
-
-        // Mostrar mensaje de éxito
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Mascota actualizada exitosamente'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        // Crear nueva mascota
-        final newPet = {
-          'id': 'pet${pets.length + 1}',
-          'name': _nameController.text,
-          'type': _selectedType,
-          'breed': _breedController.text,
-          'gender': _selectedGender,
-          'age': int.parse(_ageController.text),
-          'ownerId': 'user1', // Asumiendo que es el usuario actual
-          'image': '', // Por ahora vacío, se puede implementar después
-        };
-
-        // Agregar a la lista de mascotas
-        pets.add(newPet);
-
-        // Mostrar mensaje de éxito
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Mascota agregada exitosamente'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-
-      // Regresar a la pantalla anterior
-      Navigator.pop(context);
-    }
   }
 } 

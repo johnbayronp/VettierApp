@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:mirallapp/dummy/mock_data.dart';
-import 'package:mirallapp/features/home/presentation/add_pet_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'appointment_model.dart';
+import '../data/appointment_repository.dart';
+import '../data/pet_repository.dart';
+import 'pet_model.dart';
+import 'add_pet_screen.dart';
+import '../../../dummy/mock_data.dart';
 
 class ScheduleAppointmentScreen extends StatefulWidget {
-  final Map<String, dynamic> clinic;
+  final Map<String, dynamic>? clinic;
 
-  const ScheduleAppointmentScreen({Key? key, required this.clinic})
+  const ScheduleAppointmentScreen({Key? key, this.clinic})
     : super(key: key);
 
   @override
@@ -14,12 +20,21 @@ class ScheduleAppointmentScreen extends StatefulWidget {
 }
 
 class _ScheduleAppointmentScreenState extends State<ScheduleAppointmentScreen> {
-  String? selectedVeterinarian;
+  String? selectedVeterinarianId; // ID del veterinario
+  String? selectedVeterinarianName; // Nombre del veterinario para mostrar
   String? selectedService;
   String? selectedPet;
   DateTime selectedDate = DateTime.now();
   String? selectedTime;
   DateTime currentMonth = DateTime.now();
+  Map<String, dynamic>? selectedClinic;
+
+  @override
+  void initState() {
+    super.initState();
+    // Si se pasa una clínica específica, usarla; si no, usar la primera disponible
+    selectedClinic = widget.clinic ?? (clinics.isNotEmpty ? clinics.first : null);
+  }
 
   final List<String> availableTimes = [
     '9:00 AM',
@@ -36,12 +51,102 @@ class _ScheduleAppointmentScreenState extends State<ScheduleAppointmentScreen> {
     'Emergencia',
   ];
 
+  // Método para obtener doctores por clínica
+  List<Map<String, dynamic>> getDoctorsByClinic(String clinicId) {
+    return users.where((user) => 
+      user['role'] == 'veterinario' && 
+      user['clinicId'] == clinicId
+    ).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final doctors = getDoctorsByClinic(widget.clinic['id'] ?? '');
+    // Si no hay clínica seleccionada, mostrar mensaje de error
+    if (selectedClinic == null) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 64, color: Colors.red),
+                SizedBox(height: 16),
+                Text(
+                  'No hay clínicas disponibles',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'No se encontraron clínicas para agendar citas',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+                SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Volver'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final doctors = getDoctorsByClinic(selectedClinic!['id'] ?? '');
     final userPets = pets
         .where((pet) => pet['ownerId'] == 'user1')
         .toList(); // Obtener mascotas del usuario 1
+
+  Widget _buildVeterinarianDropdown() {
+    final doctors = getDoctorsByClinic(selectedClinic!['id'] ?? '');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Seleccionar veterinario',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+          ),
+        ),
+        SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey[300]!),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DropdownButton<String>(
+            value: selectedVeterinarianName,
+            isExpanded: true,
+            hint: Text('Selecciona un veterinario'),
+            underline: SizedBox(),
+            items: doctors.map((doctor) {
+              return DropdownMenuItem<String>(
+                value: doctor['name'] ?? 'Sin nombre',
+                child: Text(doctor['name'] ?? 'Sin nombre'),
+              );
+            }).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                final selectedDoctor = doctors.firstWhere(
+                  (doctor) => doctor['name'] == value,
+                  orElse: () => {},
+                );
+                setState(() {
+                  selectedVeterinarianName = value;
+                  selectedVeterinarianId = selectedDoctor['uid'];
+                });
+              }
+            },
+          ),
+        ),
+      ],
+    );
+  }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -84,16 +189,7 @@ class _ScheduleAppointmentScreenState extends State<ScheduleAppointmentScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Seleccionar veterinario
-                    _buildDropdownField(
-                      label: 'Seleccionar veterinario',
-                      value: selectedVeterinarian,
-                      items: doctors
-                          .map((doctor) => doctor['name'] ?? 'Sin nombre')
-                          .cast<String>()
-                          .toList(),
-                      onChanged: (value) =>
-                          setState(() => selectedVeterinarian = value),
-                    ),
+                    _buildVeterinarianDropdown(),
 
                     SizedBox(height: 20),
 
@@ -108,8 +204,8 @@ class _ScheduleAppointmentScreenState extends State<ScheduleAppointmentScreen> {
 
                     SizedBox(height: 20),
 
-                                         // Mi mascota
-                     _buildPetDropdownField(),
+                    // Mi mascota
+                    _buildPetDropdownField(),
 
                     SizedBox(height: 30),
 
@@ -180,7 +276,7 @@ class _ScheduleAppointmentScreenState extends State<ScheduleAppointmentScreen> {
                     SizedBox(height: 30),
 
                     // Veterinario asignado
-                    if (selectedVeterinarian != null) ...[
+                    if (selectedVeterinarianName != null) ...[
                       Text(
                         'Veterinario asignado',
                         style: TextStyle(
@@ -192,7 +288,7 @@ class _ScheduleAppointmentScreenState extends State<ScheduleAppointmentScreen> {
 
                       SizedBox(height: 16),
 
-                      _buildVeterinarianCard(selectedVeterinarian!),
+                      _buildVeterinarianCard(selectedVeterinarianName!),
 
                       SizedBox(height: 40),
                     ],
@@ -206,20 +302,9 @@ class _ScheduleAppointmentScreenState extends State<ScheduleAppointmentScreen> {
               child: Padding(
                 padding: EdgeInsets.all(20),
                 child: ElevatedButton(
-                  onPressed: _canConfirmAppointment()
-                      ? () {
-                          // Aquí iría la lógica para confirmar la cita
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Cita confirmada para ${selectedDate.day}/${selectedDate.month} a las $selectedTime',
-                              ),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                          Navigator.pop(context);
-                        }
-                      : null,
+                                     onPressed: _canConfirmAppointment()
+                       ? () => _confirmAppointment()
+                       : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.purple,
                     foregroundColor: Colors.white,
@@ -242,6 +327,8 @@ class _ScheduleAppointmentScreenState extends State<ScheduleAppointmentScreen> {
       ),
     );
   }
+
+
 
   Widget _buildDropdownField({
     required String label,
@@ -401,7 +488,7 @@ class _ScheduleAppointmentScreenState extends State<ScheduleAppointmentScreen> {
   }
 
   Widget _buildVeterinarianCard(String veterinarianName) {
-    final doctors = getDoctorsByClinic(widget.clinic['id'] ?? '');
+    final doctors = getDoctorsByClinic(selectedClinic!['id'] ?? '');
     final doctor = doctors.firstWhere(
       (d) => d['name'] == veterinarianName,
       orElse: () => {
@@ -457,7 +544,7 @@ class _ScheduleAppointmentScreenState extends State<ScheduleAppointmentScreen> {
   }
 
   bool _canConfirmAppointment() {
-    return selectedVeterinarian != null &&
+    return selectedVeterinarianId != null &&
         selectedService != null &&
         selectedPet != null &&
         selectedTime != null;
@@ -498,75 +585,222 @@ class _ScheduleAppointmentScreenState extends State<ScheduleAppointmentScreen> {
     return DateTime(date.year, date.month + 1, 0).day;
   }
 
-     String _getTruncatedClinicName() {
-     final clinicName = widget.clinic['name'] ?? 'Clínica';
-     if (clinicName.length > 10) {
-       return '${clinicName.substring(0, 10)}...';
-     }
-     return clinicName;
-   }
+  String _getTruncatedClinicName() {
+    final clinicName = selectedClinic?['name'] ?? 'Clínica';
+    if (clinicName.length > 10) {
+      return '${clinicName.substring(0, 10)}...';
+    }
+    return clinicName;
+  }
 
-   Widget _buildPetDropdownField() {
-     final userPets = pets
-         .where((pet) => pet['ownerId'] == 'user1')
-         .toList();
+  Widget _buildPetDropdownField() {
+    return StreamBuilder<List<Pet>>(
+      stream: FirebasePetRepository().getPetsByOwner(FirebaseAuth.instance.currentUser?.uid ?? ''),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Mi mascota',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black,
+                ),
+              ),
+              SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ],
+          );
+        }
 
-     return Column(
-       crossAxisAlignment: CrossAxisAlignment.start,
-       children: [
-         Row(
-           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-           children: [
-             Text(
-               'Mi mascota',
-               style: TextStyle(
-                 fontSize: 16,
-                 fontWeight: FontWeight.w500,
-                 color: Colors.black,
-               ),
-             ),
-             IconButton(
-               icon: Icon(Icons.add_circle, color: Colors.purple),
-               onPressed: () => _openAddPetScreen(),
-             ),
-           ],
-         ),
-         SizedBox(height: 8),
-         Container(
-           width: double.infinity,
-           padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-           decoration: BoxDecoration(
-             color: Colors.white,
-             borderRadius: BorderRadius.circular(8),
-             border: Border.all(color: Colors.grey[300]!),
-           ),
-           child: DropdownButton<String>(
-             value: selectedPet,
-             isExpanded: true,
-             underline: SizedBox(),
-             hint: Text('Seleccionar...'),
-             items: userPets.map((pet) {
-               return DropdownMenuItem<String>(
-                 value: pet['name'] ?? 'Sin nombre',
-                 child: Text(pet['name'] ?? 'Sin nombre'),
-               );
-             }).toList(),
-             onChanged: (value) => setState(() => selectedPet = value),
-           ),
-         ),
-       ],
-     );
-   }
+        final userPets = snapshot.data ?? [];
 
-   void _openAddPetScreen() {
-     Navigator.push(
-       context,
-       MaterialPageRoute(
-         builder: (context) => AddPetScreen(),
-       ),
-     ).then((_) {
-       // Refrescar la lista de mascotas cuando regrese
-       setState(() {});
-     });
-   }
- }
+        if (userPets.isEmpty) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Mi mascota',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.add_circle, color: Colors.purple),
+                    onPressed: () => _openAddPetScreen(),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: Text(
+                  'No tienes mascotas registradas. Agrega una mascota primero.',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ),
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Mi mascota',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black,
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.add_circle, color: Colors.purple),
+                  onPressed: () => _openAddPetScreen(),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: DropdownButton<String>(
+                value: selectedPet,
+                isExpanded: true,
+                underline: SizedBox(),
+                hint: Text('Seleccionar...'),
+                items: userPets.map((pet) {
+                  return DropdownMenuItem<String>(
+                    value: pet.name,
+                    child: Text('${pet.name} (${pet.breed})'),
+                  );
+                }).toList(),
+                onChanged: (value) => setState(() => selectedPet = value),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _openAddPetScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddPetScreen(),
+      ),
+    ).then((_) {
+      // Refrescar la lista de mascotas cuando regrese
+      setState(() {});
+    });
+  }
+
+  Future<void> _confirmAppointment() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception('Usuario no autenticado');
+      }
+
+      // Obtener la mascota seleccionada
+      final petsStream = FirebasePetRepository().getPetsByOwner(user.uid);
+      final pets = await petsStream.first;
+      final selectedPetData = pets.firstWhere(
+        (pet) => pet.name == selectedPet,
+        orElse: () => throw Exception('Mascota no encontrada'),
+      );
+
+      // Crear ID único para la cita
+      final appointmentId = 'appointment_${DateTime.now().millisecondsSinceEpoch}';
+
+      // Crear objeto Appointment
+      final appointment = Appointment(
+        appointmentId: appointmentId,
+        petId: selectedPetData.petId,
+        clientId: user.uid,
+        veterinarianId: selectedVeterinarianId ?? '',
+        clinicId: selectedClinic!['id'] ?? '',
+        reason: selectedService ?? '',
+        date: _parseDateTime(selectedDate, selectedTime!),
+        status: 'pending',
+        notes: '',
+      );
+
+      // Guardar en Firebase
+      final repository = FirebaseAppointmentRepository();
+      await repository.createAppointment(appointment);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '¡Cita confirmada para ${selectedPet} el ${selectedDate.day}/${selectedDate.month} a las $selectedTime!',
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      print('Error confirmando cita: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al confirmar cita: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  DateTime _parseDateTime(DateTime date, String time) {
+    final timeParts = time.split(' ');
+    final timeValue = timeParts[0];
+    final period = timeParts[1];
+    
+    final timeComponents = timeValue.split(':');
+    int hour = int.parse(timeComponents[0]);
+    final minute = int.parse(timeComponents[1]);
+    
+    if (period == 'PM' && hour != 12) {
+      hour += 12;
+    } else if (period == 'AM' && hour == 12) {
+      hour = 0;
+    }
+    
+    return DateTime(date.year, date.month, date.day, hour, minute);
+  }
+}
